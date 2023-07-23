@@ -33,7 +33,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--save_prefix ${SUBJECT}_mae_vith14_476 \
 	--input_size 476 \
 	--batch_size 11 \
-	--epochs 5 \
+	--epochs 4 \
 	--num_workers 8 \
 	--lr 0.00005 \
 	--output_dir "/vast/eo41/sayavakepicutego4d_inft_geirhos" \
@@ -50,7 +50,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--save_prefix ${SUBJECT}_mae_vith14_448 \
 	--input_size 448 \
 	--batch_size 14 \
-	--epochs 5 \
+	--epochs 4 \
 	--num_workers 8 \
 	--lr 0.00005 \
 	--output_dir "/vast/eo41/sayavakepicutego4d_inft_geirhos" \
@@ -66,7 +66,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--resume "/vast/eo41/sayavakepicutego4d_inft_0.02/${SUBJECT}_mae_vith14_checkpoint.pth" \
 	--save_prefix ${SUBJECT}_mae_vith14 \
 	--batch_size 16 \
-	--epochs 5 \
+	--epochs 4 \
 	--num_workers 8 \
 	--lr 0.0001 \
 	--output_dir "/vast/eo41/sayavakepicutego4d_inft_geirhos" \
@@ -82,7 +82,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--resume "/vast/eo41/sayavakepicutego4d_inft_0.02/${SUBJECT}_mae_vitl14_checkpoint.pth" \
 	--save_prefix ${SUBJECT}_mae_vitl14 \
 	--batch_size 16 \
-	--epochs 5 \
+	--epochs 4 \
 	--num_workers 8 \
 	--lr 0.0001 \
 	--output_dir "/vast/eo41/sayavakepicutego4d_inft_geirhos" \
@@ -98,7 +98,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--resume "/vast/eo41/sayavakepicutego4d_inft_0.02/${SUBJECT}_mae_vitb14_checkpoint.pth" \
 	--save_prefix ${SUBJECT}_mae_vitb14 \
 	--batch_size 16 \
-	--epochs 5 \
+	--epochs 4 \
 	--num_workers 8 \
 	--lr 0.0001 \
 	--output_dir "/vast/eo41/sayavakepicutego4d_inft_geirhos" \
@@ -114,7 +114,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--resume "/vast/eo41/sayavakepicutego4d_inft_0.02/${SUBJECT}_mae_vits14_checkpoint.pth" \
 	--save_prefix ${SUBJECT}_mae_vits14 \
 	--batch_size 16 \
-	--epochs 5 \
+	--epochs 4 \
 	--num_workers 8 \
 	--lr 0.0001 \
 	--output_dir "/vast/eo41/sayavakepicutego4d_inft_geirhos" \

@@ -52,7 +52,7 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
     parser.add_argument('--train_data_path', default='', type=str)
     parser.add_argument('--val_data_path', default='', type=str)
-
+    
     # training parameters
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N', help='start epoch')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
@@ -78,10 +78,12 @@ def main(args):
         pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
 
-    # training transforms
+    # training transforms (with color augmentation)
     train_transform = pth_transforms.Compose([
         pth_transforms.RandomResizedCrop(args.input_size),
         pth_transforms.RandomHorizontalFlip(),
+        pth_transforms.RandomApply([pth_transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)], p=0.8),
+        pth_transforms.RandomGrayscale(p=0.2),
         pth_transforms.ToTensor(),
         pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
     ])
@@ -107,7 +109,7 @@ def main(args):
 
     print(f"{len(train_loader)} train and {len(val_loader)} val iterations per epoch.")
     # ============ done data ... ============
-
+        
     # set up and load model
     model = models_vit.__dict__[args.model](num_classes=args.num_labels, global_pool=args.global_pool)
 
