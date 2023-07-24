@@ -21,7 +21,10 @@ import torch.backends.cudnn as cudnn
 import timm
 assert timm.__version__ == "0.3.2" # version check
 from timm.models.layers import trunc_normal_
+from timm.data.mixup import Mixup
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import util.misc as misc
+from util.datasets import build_transform
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 from torchvision import transforms as pth_transforms
@@ -41,7 +44,8 @@ def get_args_parser():
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=False)
     parser.add_argument('--cls_token', action='store_false', dest='global_pool', help='Use class token instead of global pool for classification')
-
+    parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT', help='Drop path rate (default: 0.1)')
+    
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=0.0005, metavar='LR', help='learning rate (absolute lr)')
 
@@ -53,7 +57,26 @@ def get_args_parser():
     parser.add_argument('--train_data_path', default='', type=str)
     parser.add_argument('--val_data_path', default='', type=str)
     
-    # training parameters
+    # Augmentation params
+    parser.add_argument('--color_jitter', type=float, default=None, help='Color jitter factor (enabled only when not using Auto/RandAug)')
+    parser.add_argument('--aa', type=str, default='rand-m9-mstd0.5-inc1', help='Use AutoAugment policy. "v0" or "original". " + "(default: rand-m9-mstd0.5-inc1)'),
+    parser.add_argument('--smoothing', type=float, default=0.1, help='Label smoothing (default: 0.1)')
+
+    # * Random Erase params
+    parser.add_argument('--reprob', type=float, default=0.25, help='Random erase prob (default: 0.25)')
+    parser.add_argument('--remode', type=str, default='pixel', help='Random erase mode (default: "pixel")')
+    parser.add_argument('--recount', type=int, default=1, help='Random erase count (default: 1)')
+    parser.add_argument('--resplit', action='store_true', default=False, help='Do not random erase first (clean) augmentation split')
+
+    # * Mixup params
+    parser.add_argument('--mixup', type=float, default=0.8, help='mixup alpha, mixup enabled if > 0.')
+    parser.add_argument('--cutmix', type=float, default=1.0, help='cutmix alpha, cutmix enabled if > 0.')
+    parser.add_argument('--cutmix_minmax', type=float, nargs='+', default=None, help='cutmix min/max ratio, overrides alpha and enables cutmix if set (default: None)')
+    parser.add_argument('--mixup_prob', type=float, default=1.0, help='Probability of performing mixup or cutmix when either/both is enabled')
+    parser.add_argument('--mixup_switch_prob', type=float, default=0.5, help='Probability of switching to cutmix when both mixup and cutmix enabled')
+    parser.add_argument('--mixup_mode', type=str, default='batch', help='How to apply mixup/cutmix params. Per "batch", "pair", or "elem"')
+
+    # Training parameters
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N', help='start epoch')
     parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
     parser.add_argument('--no_optim_resume', action='store_true', help='Do not resume optim')
@@ -71,22 +94,10 @@ def main(args):
 
     # ============ preparing data ... ============
     # validation transforms
-    val_transform = pth_transforms.Compose([
-        pth_transforms.Resize(args.input_size + 32, interpolation=3),
-        pth_transforms.CenterCrop(args.input_size),
-        pth_transforms.ToTensor(),
-        pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
+    val_transform = build_transform(is_train=False, args=args)
 
-    # training transforms (with color augmentation)
-    train_transform = pth_transforms.Compose([
-        pth_transforms.RandomResizedCrop(args.input_size),
-        pth_transforms.RandomHorizontalFlip(),
-        pth_transforms.RandomApply([pth_transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)], p=0.8),
-        pth_transforms.RandomGrayscale(p=0.2),
-        pth_transforms.ToTensor(),
-        pth_transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-    ])
+    # training transforms
+    train_transform = build_transform(is_train=True, args=args)
 
     val_dataset = ImageFolder(args.val_data_path, transform=val_transform)
     val_loader = DataLoader(val_dataset, batch_size=8*args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)  # note we use a larger batch size for val
@@ -109,9 +120,15 @@ def main(args):
 
     print(f"{len(train_loader)} train and {len(val_loader)} val iterations per epoch.")
     # ============ done data ... ============
+
+    mixup_fn = None
+    mixup_active = args.mixup > 0 or args.cutmix > 0. or args.cutmix_minmax is not None
+    if mixup_active:
+        print("Mixup is activated!")
+        mixup_fn = Mixup(mixup_alpha=args.mixup, cutmix_alpha=args.cutmix, cutmix_minmax=args.cutmix_minmax, prob=args.mixup_prob, switch_prob=args.mixup_switch_prob, mode=args.mixup_mode, label_smoothing=args.smoothing, num_classes=args.num_labels)
         
     # set up and load model
-    model = models_vit.__dict__[args.model](num_classes=args.num_labels, global_pool=args.global_pool)
+    model = models_vit.__dict__[args.model](num_classes=args.num_labels, drop_path_rate=args.drop_path, global_pool=args.global_pool)
 
     if args.resume and not args.eval:
         checkpoint = torch.load(args.resume, map_location='cpu')
@@ -159,7 +176,14 @@ def main(args):
     # set optimizer + loss
     loss_scaler = NativeScaler()
     optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=0.05)
-    criterion = torch.nn.CrossEntropyLoss()
+    
+    if mixup_fn is not None:
+        # smoothing is handled with mixup label transform
+        criterion = SoftTargetCrossEntropy()
+    elif args.smoothing > 0.:
+        criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
+    else:
+        criterion = torch.nn.CrossEntropyLoss()
 
     # # load if resuming from a checkpoint; I need to update the above resume probably
     # misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
@@ -175,7 +199,7 @@ def main(args):
     max_accuracy_5 = 0.0
     for epoch in range(args.start_epoch, args.epochs):
 
-        train_stats = train_one_epoch(model, criterion, train_loader, optimizer, device, epoch, loss_scaler, max_norm=None)
+        train_stats = train_one_epoch(model, criterion, train_loader, optimizer, device, epoch, loss_scaler, max_norm=None, mixup_fn=mixup_fn)
 
         test_stats = evaluate(val_loader, model, device, args.output_dir)
         print(f"Top-1 accuracy of the network on the test images: {test_stats['acc1']:.1f}%")
