@@ -24,10 +24,10 @@ from timm.models.layers import trunc_normal_
 from timm.data.mixup import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import util.misc as misc
+from util.lr_decay import param_groups_lrd
 from util.datasets import build_transform
 from util.pos_embed import interpolate_pos_embed
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
-from torchvision import transforms as pth_transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 import models_vit
@@ -44,10 +44,14 @@ def get_args_parser():
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=False)
     parser.add_argument('--cls_token', action='store_false', dest='global_pool', help='Use class token instead of global pool for classification')
-    parser.add_argument('--drop_path', type=float, default=0.1, metavar='PCT', help='Drop path rate (default: 0.1)')
+    parser.add_argument('--drop_path', type=float, default=0.3, help='Drop path rate (default: 0.3)')
     
     # Optimizer parameters
-    parser.add_argument('--lr', type=float, default=0.0005, metavar='LR', help='learning rate (absolute lr)')
+    parser.add_argument('--lr', type=float, default=None, help='learning rate (absolute lr)')
+    parser.add_argument('--blr', type=float, default=1e-3, help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
+    parser.add_argument('--layer_decay', type=float, default=0.75, help='layer-wise lr decay from ELECTRA/BEiT')
+    parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing effective batch size under memory constraints)')
+    parser.add_argument('--weight_decay', type=float, default=0.05, help='weight decay (default: 0.05)')
 
     # Dataset parameters
     parser.add_argument('--input_size', default=224, type=int, help='images input size')
@@ -156,27 +160,34 @@ def main(args):
         # manually initialize fc layer: following MoCo v3
         trunc_normal_(model.head.weight, std=0.01)
 
-    # hack: revise model's head with BN
-    model.head = torch.nn.Sequential(torch.nn.BatchNorm1d(model.head.in_features, affine=False, eps=1e-6), model.head)
     # finetune everything
     for _, p in model.named_parameters():
         p.requires_grad = True
     for _, p in model.head.named_parameters():
         p.requires_grad = True
 
-    # model = torch.nn.DataParallel(model)
-    # model_without_ddp = model.module
-    model_without_ddp = model
+    model = torch.nn.DataParallel(model)
+    model_without_ddp = model.module
     model.to(device)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     print("Model = %s" % str(model_without_ddp))
     print('number of params (M): %.2f' % (n_parameters / 1.e6))
 
-    # set optimizer + loss
+    eff_batch_size = args.batch_size * args.accum_iter * misc.get_world_size()
+    print("effective batch size: %d" % eff_batch_size)
+
+    if args.lr is None:  # only base_lr is specified
+        args.lr = args.blr * eff_batch_size / 256
+
+    print("base lr: %.2e" % (args.lr * 256 / eff_batch_size))
+    print("actual lr: %.2e" % args.lr)
+
+    # build optimizer with layer-wise lr decay (lrd)
+    param_groups = param_groups_lrd(model_without_ddp, args.weight_decay, no_weight_decay_list=model_without_ddp.no_weight_decay(), layer_decay=args.layer_decay)
+    optimizer = torch.optim.AdamW(param_groups, lr=args.lr)
     loss_scaler = NativeScaler()
-    optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=0.05)
-    
+
     if mixup_fn is not None:
         # smoothing is handled with mixup label transform
         criterion = SoftTargetCrossEntropy()
@@ -189,7 +200,7 @@ def main(args):
     # misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
-        test_stats = evaluate(val_loader, model, device, args)
+        test_stats = evaluate(val_loader, model, device)
         print(f"Accuracy of the network on the test images: {test_stats['acc1']:.1f}%")
         exit(0)
 
@@ -199,9 +210,9 @@ def main(args):
     max_accuracy_5 = 0.0
     for epoch in range(args.start_epoch, args.epochs):
 
-        train_stats = train_one_epoch(model, criterion, train_loader, optimizer, device, epoch, loss_scaler, max_norm=None, mixup_fn=mixup_fn)
+        train_stats = train_one_epoch(model, criterion, train_loader, optimizer, device, epoch, loss_scaler, max_norm=None, mixup_fn=mixup_fn, args=args)
 
-        test_stats = evaluate(val_loader, model, device, args.output_dir)
+        test_stats = evaluate(val_loader, model, device)
         print(f"Top-1 accuracy of the network on the test images: {test_stats['acc1']:.1f}%")
         print(f"Top-5 accuracy of the network on the test images: {test_stats['acc5']:.1f}%")
 

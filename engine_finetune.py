@@ -8,21 +8,29 @@
 # DeiT: https://github.com/facebookresearch/deit
 # BEiT: https://github.com/microsoft/unilm/tree/master/beit
 # --------------------------------------------------------
-import os
 import math
 import sys
-from typing import Iterable, Optional
-
 import torch
-import numpy as np
-
-from timm.data import Mixup
-from timm.utils import accuracy
-
 import util.misc as misc
 
+from typing import Iterable, Optional
+from timm.data import Mixup
+from timm.utils import accuracy
+from util.lr_sched import adjust_learning_rate
 
-def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, data_loader: Iterable, optimizer: torch.optim.Optimizer, device: torch.device, epoch: int, loss_scaler, max_norm: float = 0, mixup_fn: Optional[Mixup] = None):
+
+def train_one_epoch(
+        model: torch.nn.Module, 
+        criterion: torch.nn.Module, 
+        data_loader: Iterable, 
+        optimizer: torch.optim.Optimizer, 
+        device: torch.device, 
+        epoch: int, 
+        loss_scaler, 
+        max_norm: float = 0, 
+        mixup_fn: Optional[Mixup] = None,
+        args = None
+        ):
 
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
@@ -31,7 +39,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, data_loa
 
     optimizer.zero_grad()
 
-    for _, (samples, targets) in enumerate(metric_logger.log_every(data_loader, len(data_loader) // 1, header)):
+    for data_iter_step, (samples, targets) in enumerate(metric_logger.log_every(data_loader, len(data_loader) // 1, header)):
+
+        # we use a per iteration (instead of per epoch) lr scheduler
+        if data_iter_step % args.accum_iter == 0:
+            adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
         samples = samples.to(device, non_blocking=True)
         targets = targets.to(device, non_blocking=True)
@@ -49,8 +61,10 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, data_loa
             print("Loss is {}, stopping training".format(loss_value))
             sys.exit(1)
 
-        loss_scaler(loss, optimizer, clip_grad=max_norm, parameters=model.parameters(), create_graph=False, update_grad=True)
-        optimizer.zero_grad()
+        loss /= args.accum_iter
+        loss_scaler(loss, optimizer, clip_grad=max_norm, parameters=model.parameters(), create_graph=False, update_grad=(data_iter_step + 1) % args.accum_iter == 0)
+        if (data_iter_step + 1) % args.accum_iter == 0:
+            optimizer.zero_grad()
 
         torch.cuda.synchronize()
 
@@ -70,28 +84,18 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, data_loa
 
 
 @torch.no_grad()
-def evaluate(data_loader, model, device, output_dir):
+def evaluate(data_loader, model, device):
     criterion = torch.nn.CrossEntropyLoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
-
-    task = os.path.split(output_dir)[-1]
-    if  task == 'places365':
-        places365_val_labels = torch.from_numpy(np.load('places365_val_labels.npz')['labels'])
-        it = 0
 
     # switch to evaluation mode
     model.eval()
 
     for inp, target in metric_logger.log_every(data_loader, len(data_loader) // 1, header):
         inp = inp.to(device, non_blocking=True)
-        if task== 'places365':
-            target = places365_val_labels[it*target.size(0):(it+1)*target.size(0)]
-            target = target.to(device, non_blocking=True)
-            it += 1
-        else:
-            target = target.to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
 
         # compute output
         with torch.cuda.amp.autocast():
@@ -107,6 +111,6 @@ def evaluate(data_loader, model, device, output_dir):
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} loss {losses.global_avg:.3f}'.format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
+    print('* Acc@1 {top1.global_avg:.3f} Acc@5 {top5.global_avg:.3f} Loss {losses.global_avg:.3f}'.format(top1=metric_logger.acc1, top5=metric_logger.acc5, losses=metric_logger.loss))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
