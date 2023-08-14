@@ -57,7 +57,7 @@ def build_transform(is_train, args):
     size = int(args.input_size / crop_pct)
     t.append(transforms.Resize(size, interpolation=PIL.Image.BICUBIC))
     t.append(transforms.CenterCrop(args.input_size))
-
     t.append(transforms.ToTensor())
     t.append(transforms.Normalize(mean, std))
+    
     return transforms.Compose(t)
