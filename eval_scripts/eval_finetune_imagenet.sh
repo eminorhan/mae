@@ -30,12 +30,12 @@ echo $SUBJECT
 python -u /scratch/eo41/mae/eval_finetune.py \
 	--model vit_huge_patch14_476 \
 	--resume "/vast/eo41/sayavakepicutego4d_models/mae_vith14_476/${SUBJECT}_vith14_476_checkpoint.pth" \
-	--save_prefix ${SUBJECT}_mae_vith14_476 \
+	--save_prefix ${SUBJECT}_mae_vith14_476_0.02 \
 	--input_size 476 \
 	--batch_size 44 \
 	--epochs 50 \
 	--num_workers 16 \
-	--output_dir "/vast/eo41/sayavakepicutego4d_inft_0.02" \
+	--output_dir "/scratch/eo41/regularized_humanlike_vits" \
 	--train_data_path "/scratch/work/public/imagenet/train" \
 	--val_data_path "/scratch/eo41/imagenet/val" \
 	--frac_retained 0.02 \

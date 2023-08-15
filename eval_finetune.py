@@ -52,7 +52,9 @@ def get_args_parser():
     parser.add_argument('--layer_decay', type=float, default=0.75, help='layer-wise lr decay from ELECTRA/BEiT')
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing effective batch size under memory constraints)')
     parser.add_argument('--weight_decay', type=float, default=0.05, help='weight decay (default: 0.05)')
-
+    parser.add_argument('--warmup_epochs', type=int, default=5, help='epochs to warmup LR')
+    parser.add_argument('--clip_grad', type=float, default=None, help='Clip gradient norm (default: None, no clipping)')
+    
     # Dataset parameters
     parser.add_argument('--input_size', default=224, type=int, help='images input size')
     parser.add_argument('--num_labels', default=1000, type=int, help='number of classes')
