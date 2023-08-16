@@ -49,6 +49,7 @@ def get_args_parser():
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=None, help='learning rate (absolute lr)')
     parser.add_argument('--blr', type=float, default=1e-3, help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
+    parser.add_argument('--min_lr', type=float, default=1e-6, help='lower lr bound for cyclic schedulers that hit 0')
     parser.add_argument('--layer_decay', type=float, default=0.75, help='layer-wise lr decay from ELECTRA/BEiT')
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing effective batch size under memory constraints)')
     parser.add_argument('--weight_decay', type=float, default=0.05, help='weight decay (default: 0.05)')
@@ -106,7 +107,7 @@ def main(args):
     train_transform = build_transform(is_train=True, args=args)
 
     val_dataset = ImageFolder(args.val_data_path, transform=val_transform)
-    val_loader = DataLoader(val_dataset, batch_size=8*args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)  # note we use a larger batch size for val
+    val_loader = DataLoader(val_dataset, batch_size=16*args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)  # note we use a larger batch size for val
 
     train_dataset = ImageFolder(args.train_data_path, transform=train_transform)
     # few-shot finetuning
@@ -117,7 +118,7 @@ def main(args):
         np.random.shuffle(indices)
         train_idx = indices[:int(args.frac_retained * num_train)]
         train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
+        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=True, sampler=train_sampler)
         print(f"Data loaded with {len(train_idx)} train and {len(val_dataset)} val imgs.")
     else:
         print('Using all of train data')
