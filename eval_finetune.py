@@ -49,7 +49,7 @@ def get_args_parser():
     # Optimizer parameters
     parser.add_argument('--lr', type=float, default=None, help='learning rate (absolute lr)')
     parser.add_argument('--blr', type=float, default=1e-3, help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
-    parser.add_argument('--min_lr', type=float, default=1e-6, help='lower lr bound for cyclic schedulers that hit 0')
+    parser.add_argument('--min_lr', type=float, default=5e-5, help='lower lr bound for cyclic schedulers that hit 0')
     parser.add_argument('--layer_decay', type=float, default=0.75, help='layer-wise lr decay from ELECTRA/BEiT')
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing effective batch size under memory constraints)')
     parser.add_argument('--weight_decay', type=float, default=0.05, help='weight decay (default: 0.05)')
@@ -198,9 +198,6 @@ def main(args):
         criterion = LabelSmoothingCrossEntropy(smoothing=args.smoothing)
     else:
         criterion = torch.nn.CrossEntropyLoss()
-
-    # # load if resuming from a checkpoint; I need to update the above resume probably
-    # misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
         test_stats = evaluate(val_loader, model, device)

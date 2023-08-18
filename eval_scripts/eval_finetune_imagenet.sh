@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:a100:4
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=480GB
-#SBATCH --time=16:00:00
+#SBATCH --time=48:00:00
 #SBATCH --job-name=mae_finetune_imagenet
 #SBATCH --output=mae_finetune_imagenet_%A_%a.out
 #SBATCH --array=0
@@ -33,7 +33,7 @@ python -u /scratch/eo41/mae/eval_finetune.py \
 	--save_prefix ${SUBJECT}_mae_vith14_476_0.02 \
 	--input_size 476 \
 	--batch_size 44 \
-	--epochs 50 \
+	--epochs 100 \
 	--num_workers 16 \
 	--output_dir "/scratch/eo41/regularized_humanlike_vits" \
 	--train_data_path "/scratch/work/public/imagenet/train" \
