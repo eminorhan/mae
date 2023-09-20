@@ -65,6 +65,8 @@ def get_args_parser():
     parser.add_argument('--pin_mem', action='store_true', help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
     parser.set_defaults(pin_mem=True)
+    parser.add_argument("--jitter_scale", default=[0.2, 1.0], type=float, nargs="+")
+    parser.add_argument("--jitter_ratio", default=[0.6667, 1.5], type=float, nargs="+")
 
     # distributed training parameters
     parser.add_argument('--local_rank', default=0, type=int)
@@ -83,7 +85,7 @@ def main(args):
 
     # simple augmentation
     transform = transforms.Compose([
-        transforms.RandomResizedCrop(args.input_size, scale=(0.2, 1.0), interpolation=3), 
+        transforms.RandomResizedCrop(args.input_size, scale=args.jitter_scale, ratio=args.jitter_aspect, interpolation=3), 
         transforms.RandomHorizontalFlip(), 
         transforms.ToTensor(), 
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
