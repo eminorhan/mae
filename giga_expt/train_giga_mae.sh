@@ -16,10 +16,10 @@ export WORLD_SIZE=1
 
 # vit-s/15
 srun python -u /scratch/eo41/mae/train_mae_nowds.py \
-	--model 'mae_vit_small_patch15' \
+	--model 'mae_vit_small_patch14' \
 	--resume "" \
 	--batch_size_per_gpu 1 \
-	--input_size 2250 1500 \
+	--input_size 1400 \
 	--mask_ratio 0.8 \
 	--num_workers 16 \
 	--lr 0.0001 \
