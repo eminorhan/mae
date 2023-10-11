@@ -11,9 +11,7 @@
 import os
 import sys
 import math
-import time
 import argparse
-import datetime
 import json
 from pathlib import Path
 
@@ -31,7 +29,6 @@ import timm.optim.optim_factory as optim_factory
 
 import models_mae
 
-from typing import Iterable
 import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 
@@ -39,7 +36,7 @@ from util.misc import NativeScalerWithGradNormCount as NativeScaler
 def get_args_parser():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
     parser.add_argument('--batch_size_per_gpu', default=256, type=int, help='Batch size per GPU (effective batch size is batch_size_per_gpu * accum_iter * # gpus')
-    parser.add_argument('--epochs', default=999, type=int)
+    parser.add_argument('--epochs', default=999999, type=int)
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
     parser.add_argument("--save_prefix", default="", type=str, help="""prefix for saving checkpoint and log files""")
 
@@ -49,7 +46,7 @@ def get_args_parser():
     parser.add_argument('--input_size', default=224, type=int, help='images input size')
     parser.add_argument('--mask_ratio', default=0.8, type=float, help='Masking ratio (percentage of removed patches).')
     parser.add_argument('--norm_pix_loss', action='store_true', help='Use (per-patch) normalized pixels as targets for computing loss')
-    parser.set_defaults(norm_pix_loss=False)
+    parser.set_defaults(norm_pix_loss=True)
 
     # Optimizer parameters
     parser.add_argument('--weight_decay', type=float, default=0.05, help='weight decay (default: 0.05)')
@@ -66,7 +63,7 @@ def get_args_parser():
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
     parser.set_defaults(pin_mem=True)
     parser.add_argument("--jitter_scale", default=[0.2, 1.0], type=float, nargs="+")
-    parser.add_argument("--jitter_ratio", default=[0.6667, 1.5], type=float, nargs="+")
+    parser.add_argument("--jitter_ratio", default=[3.0/4.0, 4.0/3.0], type=float, nargs="+")
 
     # distributed training parameters
     parser.add_argument('--local_rank', default=0, type=int)
@@ -85,7 +82,7 @@ def main(args):
 
     # simple augmentation
     transform = transforms.Compose([
-        transforms.RandomResizedCrop(args.input_size, scale=args.jitter_scale, ratio=args.jitter_aspect, interpolation=3), 
+        transforms.RandomResizedCrop(args.input_size, scale=args.jitter_scale, ratio=args.jitter_ratio, interpolation=3), 
         transforms.RandomHorizontalFlip(), 
         transforms.ToTensor(), 
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -94,6 +91,7 @@ def main(args):
     dataset = ImageFolder(args.data_path, transform=transform)
     sampler = DistributedSampler(dataset, num_replicas=misc.get_world_size(), rank=misc.get_rank(), shuffle=True)
     data_loader = DataLoader(dataset, sampler=sampler, batch_size=args.batch_size_per_gpu, num_workers=args.num_workers, pin_memory=args.pin_mem, drop_last=True)
+    print('Num iters per epoch:', len(data_loader))
 
     # define the model
     model = models_mae.__dict__[args.model](img_size=args.input_size, norm_pix_loss=args.norm_pix_loss)
@@ -104,7 +102,7 @@ def main(args):
     
     n_parameters = sum(p.numel() for p in model_without_ddp.parameters() if p.requires_grad)
     print("Model = %s" % str(model_without_ddp))
-    print('number of params (M): %.2f' % (n_parameters / 1.e6))
+    print('Number of params (M): %.2f' % (n_parameters / 1.e6))
 
     # following timm: set wd as 0 for bias and norm layers
     param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
@@ -112,77 +110,63 @@ def main(args):
     loss_scaler = NativeScaler()
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
-    optimizer.lr = args.lr  # override loaded lr
     
-    print("Starting MAE training!")
-    start_time = time.time()
-    for epoch in range(args.start_epoch, args.epochs):
-        train_one_epoch(model, data_loader, optimizer, device, loss_scaler, epoch, args=args)
-
-    total_time = time.time() - start_time
-    total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Training time {}'.format(total_time_str))
-
-
-def train_one_epoch(model: torch.nn.Module, data_loader: Iterable, optimizer: torch.optim.Optimizer, device: torch.device, loss_scaler, epoch, args=None):
-    
-    data_loader.sampler.set_epoch(epoch)
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
-    accum_iter = args.accum_iter
-
     optimizer.zero_grad()
 
-    for it, (samples, _) in enumerate(data_loader):
+    print("Starting MAE training!")
+    for epoch in range(args.start_epoch, args.epochs):
 
-        samples = samples.to(device, non_blocking=True)
+        data_loader.sampler.set_epoch(epoch)
 
-        with torch.cuda.amp.autocast():
-            loss, _, _ = model(samples, mask_ratio=args.mask_ratio)
+        for it, (samples, _) in enumerate(data_loader):
 
-        loss_value = loss.item()
+            global_it = it + epoch * len(data_loader)  # global iteration counter is necessary for correct grad accumulation with very small sample sizes
 
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+            samples = samples.to(device, non_blocking=True)
 
-        loss = loss / accum_iter
-        loss_scaler(loss, optimizer, parameters=model.parameters(), update_grad=(it + 1) % accum_iter == 0)
-        if (it + 1) % accum_iter == 0:
-            optimizer.zero_grad()
+            with torch.cuda.amp.autocast():
+                loss, _, _ = model(samples, mask_ratio=args.mask_ratio)
 
-        torch.cuda.synchronize()
+            loss_value = loss.item()
 
-        metric_logger.update(loss=loss_value)
+            if not math.isfinite(loss_value):
+                print("Loss is {}, stopping training".format(loss_value))
+                sys.exit(1)
 
-        lr = optimizer.param_groups[0]["lr"]
-        metric_logger.update(lr=lr)
+            loss = loss / args.accum_iter
+            loss_scaler(loss, optimizer, parameters=model.parameters(), update_grad=(global_it + 1) % args.accum_iter == 0)
+            if (global_it + 1) % args.accum_iter == 0:
+                optimizer.zero_grad()
 
-    # ============ writing logs + saving checkpoint ============
-    save_dict = {
-        'model': model.module.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'args': args,
-        'epoch': epoch,
-        'scaler': loss_scaler.state_dict(),
-    }
+            torch.cuda.synchronize()
 
-    misc.save_on_master(save_dict, os.path.join(args.output_dir, args.save_prefix + '_checkpoint.pth'))
+            metric_logger.update(loss=loss_value)
 
-    # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
-    train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-    log_stats = {**{f'train_{k}': v for k, v in train_stats.items()}, 'epoch': epoch}
+        # ============ writing logs + saving checkpoint ============
+        save_dict = {
+            'model': model.module.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'args': args,
+            'epoch': epoch,
+            'scaler': loss_scaler.state_dict(),
+        }
 
-    if misc.is_main_process():
-        with (Path(args.output_dir) / (args.save_prefix + "_log.txt")).open("a") as f:
-            f.write(json.dumps(log_stats) + "\n")
+        misc.save_on_master(save_dict, os.path.join(args.output_dir, args.save_prefix + '_checkpoint.pth'))
 
-    # start a fresh logger to wipe off old stats
-    metric_logger = misc.MetricLogger(delimiter="  ")
+        # gather the stats from all processes
+        metric_logger.synchronize_between_processes()
+        print("Averaged stats:", metric_logger)
+        train_stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+        log_stats = {**{f'train_{k}': v for k, v in train_stats.items()}, 'epoch': epoch}
 
+        if misc.is_main_process():
+            with (Path(args.output_dir) / (args.save_prefix + "_log.txt")).open("a") as f:
+                f.write(json.dumps(log_stats) + "\n")
+
+        # start a fresh logger to wipe off old stats
+        metric_logger = misc.MetricLogger(delimiter="  ")
 
 if __name__ == '__main__':
     args = get_args_parser()
