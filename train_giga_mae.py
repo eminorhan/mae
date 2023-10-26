@@ -38,7 +38,8 @@ def get_args_parser():
     parser.add_argument('--batch_size_per_gpu', default=256, type=int, help='Batch size per GPU (effective batch size is batch_size_per_gpu * accum_iter * # gpus')
     parser.add_argument('--epochs', default=999999, type=int)
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
-    parser.add_argument("--save_prefix", default="", type=str, help="""prefix for saving checkpoint and log files""")
+    parser.add_argument('--save_prefix', default='', type=str, help='Prefix for saving checkpoint and log files')
+    parser.add_argument('--ckpt_freq', default=10, type=int, help='Model checkpointing frequency')
 
     # Model parameters
     parser.add_argument('--model', default='mae_vit_large_patch16', type=str, metavar='MODEL', help='Name of model to train')
@@ -62,8 +63,8 @@ def get_args_parser():
     parser.add_argument('--pin_mem', action='store_true', help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
     parser.set_defaults(pin_mem=True)
-    parser.add_argument("--jitter_scale", default=[0.2, 1.0], type=float, nargs="+")
-    parser.add_argument("--jitter_ratio", default=[3.0/4.0, 4.0/3.0], type=float, nargs="+")
+    parser.add_argument('--jitter_scale', default=[0.2, 1.0], type=float, nargs='+')
+    parser.add_argument('--jitter_ratio', default=[3.0/4.0, 4.0/3.0], type=float, nargs='+')
 
     # distributed training parameters
     parser.add_argument('--local_rank', default=0, type=int)
@@ -153,7 +154,8 @@ def main(args):
             'scaler': loss_scaler.state_dict(),
         }
 
-        misc.save_on_master(save_dict, os.path.join(args.output_dir, args.save_prefix + '_checkpoint.pth'))
+        if epoch % args.ckpt_freq ==0:
+            misc.save_on_master(save_dict, os.path.join(args.output_dir, args.save_prefix + '_checkpoint.pth'))
 
         # gather the stats from all processes
         metric_logger.synchronize_between_processes()
