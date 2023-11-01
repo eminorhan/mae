@@ -63,7 +63,7 @@ def get_args_parser():
     parser.add_argument('--pin_mem', action='store_true', help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
     parser.set_defaults(pin_mem=True)
-    parser.add_argument('--jitter_scale', default=[0.2, 1.0], type=float, nargs='+')
+    parser.add_argument('--jitter_scale', default=[0.1, 1.0], type=float, nargs='+')
     parser.add_argument('--jitter_ratio', default=[3.0/4.0, 4.0/3.0], type=float, nargs='+')
 
     # distributed training parameters

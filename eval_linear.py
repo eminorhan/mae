@@ -48,7 +48,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=100, type=int)
 
     # Model parameters
-    parser.add_argument('--model', default='vit_large_patch16', type=str, choices=['vit_large_patch16', 'vit_base_patch16', 'vit_small_patch16'], help='Name of model to train')
+    parser.add_argument('--model', default='vit_large_patch16', type=str, choices=['vit_huge_patch14', 'vit_large_patch16', 'vit_base_patch16', 'vit_small_patch16'], help='Name of model to train')
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=False)
