@@ -38,7 +38,8 @@ def get_args_parser():
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
-    parser.add_argument('--model', default='', type=str, choices=['vit_huge_patch14_476', 'vit_huge_patch14_448', 'vit_huge_patch14', 'vit_large_patch14', 'vit_base_patch14', 'vit_small_patch14'], help='Name of model')
+    parser.add_argument('--model', default='', type=str, choices=['vit_huge_patch14_896', 'vit_huge_patch14_476', 'vit_huge_patch14_448', 'vit_huge_patch14', 'vit_large_patch14', 
+                                                                  'vit_base_patch14', 'vit_small_patch14'], help='Name of model')
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=False)
@@ -61,7 +62,7 @@ def get_args_parser():
     parser.add_argument('--no_optim_resume', action='store_true', help='Do not resume optim')
     parser.add_argument('--num_workers', default=8, type=int)
     parser.add_argument("--save_prefix", default="", type=str, help="""prefix for saving checkpoint and log files""")
-    parser.add_argument("--frac_retained", default=0.0005, type=float, choices=[0.010147, 0.02, 0.03, 0.05, 0.1, 1.0], help="""Fraction of train data retained for finetuning""")
+    parser.add_argument("--frac_retained", default=0.0005, type=float, choices=[0.01, 0.010147, 0.02, 0.03, 0.05, 0.1, 1.0], help="""Fraction of train data retained for finetuning""")
 
     return parser
 
@@ -139,15 +140,6 @@ def main(args):
         # manually initialize fc layer: following MoCo v3
         trunc_normal_(model.head.weight, std=0.01)
 
-    # hack: revise model's head with BN
-    model.head = torch.nn.Sequential(torch.nn.BatchNorm1d(model.head.in_features, affine=False, eps=1e-6), model.head)
-    
-    # finetune everything
-    for _, p in model.named_parameters():
-        p.requires_grad = True
-    for _, p in model.head.named_parameters():
-        p.requires_grad = True
-
     model_without_ddp = model
     model.to(device)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -165,13 +157,15 @@ def main(args):
         print(f"Accuracy of the network on the test images: {test_stats['acc1']:.1f}%")
         exit(0)
 
+    model.train(True)
+    optimizer.zero_grad()
+
     print(f"Start training for {args.epochs} epochs")
     start_time = time.time()
     max_accuracy_1 = 0.0
     max_accuracy_5 = 0.0
+    # TODO: loss tracking
     for epoch in range(args.start_epoch, args.epochs):
-
-        train_loader.sampler.set_epoch(epoch)
 
         for it, (samples, targets) in enumerate(train_loader):
 
@@ -185,7 +179,6 @@ def main(args):
                 loss = criterion(outputs, targets)
 
             loss_value = loss.item()
-            print(f"Iter: {global_it}, Loss: {loss_value}")
 
             if not math.isfinite(loss_value):
                 print("Loss is {}, stopping training".format(loss_value))
