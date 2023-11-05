@@ -866,3 +866,7 @@ def vit_huge_patch14_490(**kwargs):
 def vit_huge_patch14_476(**kwargs):
     model = VisionTransformer(img_size=476, patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
+
+def vit_huge_patch14_1232(**kwargs):
+    model = VisionTransformer(img_size=1232, patch_size=14, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
