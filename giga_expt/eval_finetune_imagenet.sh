@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=240GB
-#SBATCH --time=1:00:00
+#SBATCH --time=0:10:00
 #SBATCH --job-name=eval_finetune_imagenet
 #SBATCH --output=eval_finetune_imagenet_%A_%a.out
 #SBATCH --array=0
@@ -12,7 +12,7 @@ MODEL_DIR=models_1
 
 srun python -u ../eval_finetune_accum.py \
 	--model vit_huge_patch14_896 \
-	--resume '' \
+	--resume pretrained_models/${MODEL_DIR}/giga_vith14_m78_1_${SLURM_ARRAY_TASK_ID}_checkpoint.pth \
 	--save_prefix giga_vith14_m78_1_${SLURM_ARRAY_TASK_ID}_eval_finetune_imagenet \
 	--input_size 896 \
 	--batch_size 1 \
