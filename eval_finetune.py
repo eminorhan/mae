@@ -36,7 +36,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=100, type=int)
 
     # Model parameters
-    parser.add_argument('--model', default='', type=str, choices=['vit_huge_patch14_476', 'vit_huge_patch14_448', 'vit_huge_patch14', 'vit_large_patch14', 'vit_base_patch14', 'vit_small_patch14'], help='Name of model')
+    parser.add_argument('--model', default='', type=str, choices=['vit_huge_patch14_476', 'vit_huge_patch14_448', 'vit_huge_patch14', 'vit_large_patch14', 'vit_base_patch14', 'vit_small_patch14'], help='name of model')
     parser.add_argument('--resume', default='', help='resume from checkpoint')
     parser.add_argument('--global_pool', action='store_true')
     parser.set_defaults(global_pool=False)
@@ -55,11 +55,11 @@ def get_args_parser():
 
     # training parameters
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N', help='start epoch')
-    parser.add_argument('--eval', action='store_true', help='Perform evaluation only')
-    parser.add_argument('--no_optim_resume', action='store_true', help='Do not resume optim')
+    parser.add_argument('--eval', action='store_true', help='perform evaluation only')
+    parser.add_argument('--no_optim_resume', action='store_true', help='do not resume optim')
     parser.add_argument('--num_workers', default=8, type=int)
-    parser.add_argument("--save_prefix", default="", type=str, help="""prefix for saving checkpoint and log files""")
-    parser.add_argument("--frac_retained", default=0.0005, type=float, choices=[0.010147, 0.02, 0.03, 0.05, 0.1, 1.0], help="""Fraction of train data retained for finetuning""")
+    parser.add_argument("--save_prefix", default="", type=str, help='prefix for saving checkpoint and log files')
+    parser.add_argument("--frac_retained", default=0.0005, type=float, choices=[0.010147, 0.02, 0.03, 0.05, 0.1, 1.0], help='fraction of train data retained for finetuning')
 
     return parser
 

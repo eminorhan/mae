@@ -50,16 +50,16 @@ export WORLD_SIZE=1
 # 	--data_path "/scratch/eo41/data/saycam/A_5fps_300s_{000000..000002}.tar" \
 # 	--save_prefix "a_5fps_vits16"
 	
-srun python -u /scratch/eo41/mae/train_mae.py \
-	--model 'mae_vit_small_patch16' \
-	--resume "/scratch/eo41/mae/models_vits16/y_5fps_vits16_checkpoint.pth" \
-	--batch_size_per_gpu 512 \
-	--num_workers 8 \
-	--lr 0.0003 \
-	--min_lr 0.0003 \
-	--weight_decay 0.0 \
-	--output_dir "/scratch/eo41/mae/models_vits16" \
-	--data_path "/scratch/eo41/data/saycam/Y_5fps_300s_{000000..000002}.tar" \
-	--save_prefix "y_5fps_vits16"
+# srun python -u /scratch/eo41/mae/train_mae.py \
+# 	--model 'mae_vit_small_patch16' \
+# 	--resume "/scratch/eo41/mae/models_vits16/y_5fps_vits16_checkpoint.pth" \
+# 	--batch_size_per_gpu 512 \
+# 	--num_workers 8 \
+# 	--lr 0.0003 \
+# 	--min_lr 0.0003 \
+# 	--weight_decay 0.0 \
+# 	--output_dir "/scratch/eo41/mae/models_vits16" \
+# 	--data_path "/scratch/eo41/data/saycam/Y_5fps_300s_{000000..000002}.tar" \
+# 	--save_prefix "y_5fps_vits16"
 
 echo "Done"

@@ -6,15 +6,16 @@
 #SBATCH --time=2:00:00
 #SBATCH --job-name=eval_linear_imagenet
 #SBATCH --output=eval_linear_imagenet_%A_%a.out
-#SBATCH --array=1
+#SBATCH --array=0
 
-MODEL_DIR=models_1
+NUM_IMGS=10000
+MODEL_DIR=models_${NUM_IMGS}
 
 # imagenet
 srun python -u ../eval_linear.py \
 	--model vit_huge_patch14 \
-	--resume pretrained_models/${MODEL_DIR}/giga_vith14_m78_1_${SLURM_ARRAY_TASK_ID}_checkpoint.pth \
-	--save_prefix giga_vith14_m78_1_${SLURM_ARRAY_TASK_ID}_eval_linear_imagenet \
+	--resume pretrained_models/${MODEL_DIR}/giga_vith14_m80_${NUM_IMGS}_${SLURM_ARRAY_TASK_ID}_checkpoint.pth \
+	--save_prefix giga_vith14_m80_${NUM_IMGS}_${SLURM_ARRAY_TASK_ID}_eval_linear_imagenet \
 	--batch_size 1024 \
 	--epochs 50 \
 	--num_workers 16 \

@@ -39,7 +39,7 @@ def get_args_parser():
     parser.add_argument('--epochs', default=999999, type=int)
     parser.add_argument('--accum_iter', default=1, type=int, help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
     parser.add_argument('--save_prefix', default='', type=str, help='Prefix for saving checkpoint and log files')
-    parser.add_argument('--ckpt_freq', default=10, type=int, help='Model checkpointing frequency')
+    parser.add_argument('--ckpt_freq', default=10, type=int, help='Model checkpointing frequency in epochs')
 
     # Model parameters
     parser.add_argument('--model', default='mae_vit_large_patch16', type=str, metavar='MODEL', help='Name of model to train')
